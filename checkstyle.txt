@@ -1,0 +1,11 @@
+Starting audit...
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:1: File does not end with a newline. [NewlineAtEndOfFile]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:76:20: Name 'PlayerOneDecks' must match pattern '^[a-z][a-zA-Z0-9]*$'. [LocalVariableName]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:77:20: Name 'PlayerTwoDecks' must match pattern '^[a-z][a-zA-Z0-9]*$'. [LocalVariableName]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:116:25: Parameter name should be final. [FinalParameters]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:120:27: Parameter health should be final. [FinalParameters]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:124:32: Parameter description should be final. [FinalParameters]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:128:25: Parameter mana should be final. [FinalParameters]
+[ERROR] C:\Users\mazil\IdeaProjects\GwentStone\.\src\main\Main.java:132:27: Parameter colors should be final. [FinalParameters]
+Audit done.
+Checkstyle ends with 8 errors.
