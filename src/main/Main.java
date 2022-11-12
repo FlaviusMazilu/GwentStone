@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Random;
 
 import static java.lang.System.exit;
+import static java.util.Collections.min;
 import static java.util.Collections.shuffle;
 import static java.util.Random.*;
 
@@ -95,7 +96,8 @@ public final class Main {
 
             for (ActionsInput iteratorAction : actionsInp) {
                 ObjectNode printResult = executeAction(iteratorAction, gameEnv, objectMapper);
-                output.add(printResult);
+                if (printResult.size() != 0)
+                    output.add(printResult);
             }
 
         }
@@ -108,42 +110,112 @@ public final class Main {
 
         ObjectNode resultForPrint = objectMapper.createObjectNode();
         int playerIndex = iteratorAction.getPlayerIdx();
-        resultForPrint.put("command", iteratorAction.getCommand());
+        int handIndex = iteratorAction.getHandIdx();
+
 
         if (iteratorAction.getCommand().compareTo("getPlayerTurn") == 0) {
+            resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.put("output", gameEnv.getPlayerTurn());
         }
 
         if (iteratorAction.getCommand().compareTo("getPlayerHero") == 0) {
             Hero hero = gameEnv.getPlayer(playerIndex).getPlayerHero();
+            resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.put("playerIdx", playerIndex);
             resultForPrint.putPOJO("output", hero);
         }
         if (iteratorAction.getCommand().compareTo("getPlayerDeck") == 0) {
+            resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.put("playerIdx", playerIndex);
-            resultForPrint.putPOJO("output", gameEnv.getPlayer(playerIndex).getChosenDeck());
+            resultForPrint.putPOJO("output", new ArrayList<Card>(gameEnv.getPlayer(playerIndex).getChosenDeck()));
+        }
+        if (iteratorAction.getCommand().compareTo("placeCard") == 0) {
+            String error = gameEnv.placeCard(handIndex);
+            if (error != null) {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.put("handIdx", 0);
+                resultForPrint.put("error", error);
+            }
+        }
+        if (iteratorAction.getCommand().compareTo("endPlayerTurn") == 0)
+            gameEnv.endPlayerTurn();
+
+        if (iteratorAction.getCommand().compareTo("getCardsInHand") == 0) {
+            resultForPrint.put("command", iteratorAction.getCommand());
+            resultForPrint.put("playerIdx", playerIndex);
+            resultForPrint.putPOJO("output", new ArrayList<Card>(gameEnv.getCardsInHand(playerIndex)));
+        }
+        if (iteratorAction.getCommand().compareTo("getCardsOnTable") == 0) {
+            resultForPrint.put("command", iteratorAction.getCommand());
+            resultForPrint.putPOJO("output", gameEnv.getCardsOnTable());
+        }
+        if (iteratorAction.getCommand().compareTo("getPlayerMana") == 0) {
+            resultForPrint.put("command", iteratorAction.getCommand());
+            resultForPrint.put("playerIdx", playerIndex);
+            resultForPrint.put("output", gameEnv.getPlayer(playerIndex).getMana());
         }
         return resultForPrint;
+    }
+}
+class Table {
+    private Card[][] table;
+    private boolean[][] freezeStatus;
+
+    public Table() {
+        table = new Card[4][5];
+        freezeStatus = new boolean[4][5];
+    }
+
+    public Card getEntry(int i, int j) {
+        return table[i][j];
+    }
+    public void setEntry(int i, int j, Card card) {
+        table[i][j] = card;
+    }
+    public boolean getFreezeStatus(int i, int j) {
+        return freezeStatus[i][j];
+    }
+    public void setFreezeStatus(int i, int j, boolean status) {
+        freezeStatus[i][j] = status;
+    }
+
+    public ArrayList<ArrayList<Card>> printTable() {
+        ArrayList<ArrayList<Card>>cardsOnTable = new ArrayList<>();
+        for (int i = 0 ; i < 4; i++) {
+            cardsOnTable.add(new ArrayList<Card>());
+            for (int j = 0; j < 5; j++) {
+                if (table[i][j] != null)
+                    cardsOnTable.get(i).add(table[i][j]);
+            }
+        }
+        return cardsOnTable;
     }
 }
 class Game {
 
 
     private Player playerOne;
+    private Table table = new Table();
     private Player playerTwo;
-    private Card[][] table = new Card[4][5];
     private int seed;
     private int deckIndexPlayerOne;
     private int deckIndexPlayerTwo;
     private int playerTurn;
-
+    private int nrRound = 1;
+    private int playerStarting;
 
 
     public Game(StartGameInput gameInp, Player playerOne, Player playerTwo) {
         seed = gameInp.getShuffleSeed();
         deckIndexPlayerOne = gameInp.getPlayerOneDeckIdx();
         deckIndexPlayerTwo = gameInp.getPlayerTwoDeckIdx();
+
         playerTurn = gameInp.getStartingPlayer();
+        playerStarting = playerTurn;
+
+        playerOne.setMana(1);
+        playerTwo.setMana(1);
+
         this.playerOne = playerOne;
         this.playerTwo = playerTwo;
 
@@ -153,41 +225,76 @@ class Game {
         playerOne.setPlayerHero(new Hero(gameInp.getPlayerOneHero()));
         playerTwo.setPlayerHero(new Hero(gameInp.getPlayerTwoHero()));
 
-        playerOne.addCardInHand(playerOne.getChosenDeck().remove(0));
-        playerTwo.addCardInHand(playerTwo.getChosenDeck().remove(0));
+        //initiates first round
+        drawNewCard();
 
-    }
-    public Card[][] getTable() {
-        return table;
-    }
-
-    public void setTable(Card[][] table) {
-        this.table = table;
     }
 
     public Card getElem(int i, int j) {
-        return table[i][j];
+        return table.getEntry(i,j);
     }
     public int getSeed() {
         return seed;
     }
-
     public int getDeckIndexPlayerOne() {
         return deckIndexPlayerOne;
     }
-
     public int getDeckIndexPlayerTwo() {
         return deckIndexPlayerTwo;
     }
-
     public int getPlayerTurn() {
         return playerTurn;
     }
 
 //    "endPlayerTurn"
-    public void endPlayerTurn() { //TODO adaugat mana
+    public void endPlayerTurn() {
+        unfreezePlayerCards(playerTurn);
+
         playerTurn = ((playerTurn == 1) ? 2 : 1);
+        if (playerTurn == playerStarting) {
+            // it starts a new round
+            nrRound++;
+            startNewRound();
+        }
     }
+    private void unfreezePlayerCards(int indexPlayer) {
+        int i,j;
+        if (indexPlayer == 2) {
+            i = 0;
+            j = 2;
+        } else {
+            i = 2;
+            j = 4;
+        }
+        for (; i < 2; i++) {
+            for (; j < 5; j++) {
+                table.setFreezeStatus(i,j, false);
+            }
+        }
+    }
+    private void startNewRound() {
+        int aux = playerOne.getMana();
+        playerOne.setMana(aux + Math.min(nrRound, 10));
+
+        aux = playerTwo.getMana();
+        playerTwo.setMana(aux + Math.min(nrRound, 10));
+        //both of them get in hand first card available in their deck
+        drawNewCard();
+
+    }
+
+    private void drawNewCard() {
+        if (!playerOne.getChosenDeck().isEmpty())
+            playerOne.addCardInHand(playerOne.getChosenDeck().remove(0));
+        else
+            System.out.println("empty deck 1 tried to draw card");
+        if (!playerTwo.getChosenDeck().isEmpty())
+            playerTwo.addCardInHand(playerTwo.getChosenDeck().remove(0));
+        else
+            System.out.println("empty deck 2 tried to draw card");
+
+    }
+
     public Player getPlayer(int index) {
         if (index == 1)
             return playerOne;
@@ -197,6 +304,80 @@ class Game {
         return null;
     }
 
+    public String placeCard(int handIndex) {
+        Player player = getPlayer(playerTurn);
+        ArrayList<Card> handCards = player.getCardsInHand();
+        Card card;
+        if (handIndex >= handCards.size())
+            return "ke pasa zoro";
+        card = handCards.get(handIndex);
+        if (card instanceof Environment) {
+            return "Cannot place environment card on table.";
+        }
+        if (player.getMana() < card.getMana()) {
+            return "Not enough mana to place card on table.";
+        }
+        if (cardsOnRowCounter(((Minion)card).findSittingRow(), playerTurn) == 5) {
+            return "Cannot place card on table since row is full.";
+        }
+        card = handCards.remove(handIndex); // removes the card from the hand
+        placeCardOnRow((Minion)card, playerTurn);
+        int aux = player.getMana();
+        player.setMana(aux - card.getMana());
+        //it's no error
+        return null;
+    }
+    private int cardsOnRowCounter(char row, int indexPlayer) {
+        int i = findNeededRow(indexPlayer, row);
+        
+        if (i == -1) {
+            System.out.println("checkIfRowFull error");
+            exit(100);
+        }
+        
+        int count = 0;
+        for (int j = 0; j < 5; j++) {
+            if (table.getEntry(i, j) != null)
+                count++;
+        }
+        return count;
+    }
+
+    private void placeCardOnRow(Minion card, int playerIdx) {
+        int i = findNeededRow(playerIdx, card.findSittingRow());
+        int j = 0;
+        for (j = 0; j < 5; j++) {
+            if (table.getEntry(i,j) == null)
+                break;
+        }
+        table.setEntry(i, j, card);
+    }
+
+    //finds the row according to the type of card(sits Front or Back) and to the player index
+    private int findNeededRow(int playerIdx, char rowPos) {
+        if (playerIdx == 2 && rowPos == 'F')
+            return 1;
+        if (playerIdx == 2 && rowPos == 'B')
+            return 0;
+        if (playerIdx == 1 && rowPos == 'F')
+            return 2;
+        if (playerIdx == 1 && rowPos == 'B')
+            return 3;
+        return -1;
+    }
+//    public boolean checkIfCanAttackRow() {
+//
+//    }
+//    private void shiftToLeft() {
+//
+//    }
+    public ArrayList<ArrayList<Card>> getCardsOnTable() {
+        return table.printTable();
+    }
+    public ArrayList<Card> getCardsInHand(int playerIdx) {
+            return getPlayer(playerIdx).getCardsInHand();
+    }
+
 }
 
 class Player {
@@ -204,10 +385,10 @@ class Player {
     private Hero playerHero;
     private ArrayList<Card> cardsInHand;
     private ArrayList<Card> chosenDeck;
-
     private ArrayList<ArrayList<Card>> allDecks;
     private int nrDecks;
     private int nrCardsInDeck;
+    private int mana;
 
     public Player(DecksInput decksInp) {
         nrDecks = decksInp.getNrDecks();
@@ -228,7 +409,6 @@ class Player {
         // implementation of creating a card based on which type of it, the card is
         for (ArrayList<CardInput> currentDeckInp : decksInp) {
             for (CardInput currentCardInp : currentDeckInp) {
-//                String type = TestCondition.typeOfCard(currentCardInp.getName());
                 Card newCard = createTypeOfCard(currentCardInp);
                 if (newCard == null) {
                     System.out.println("Invalid card name\n");
@@ -302,9 +482,14 @@ class Player {
     public void setChosenDeck(int indexDeck, int seed) {
         this.chosenDeck = new ArrayList<Card>(allDecks.get(indexDeck));
 
-//        Random randomer = new Random(seed);
         Collections.shuffle(chosenDeck, new Random(seed));
+    }
+    public int getMana() {
+        return mana;
+    }
 
+    public void setMana(int mana) {
+        this.mana = mana;
     }
 }
 
@@ -374,7 +559,7 @@ abstract class Card {
     private String description;
     private ArrayList<String> colors;
     private String name;
-    private boolean frozen;
+//    public boolean frozen;
 
     Card(CardInput cardInp) { // shallow copy
         this.name = cardInp.getName();
@@ -382,7 +567,7 @@ abstract class Card {
         this.description = cardInp.getDescription();
 //        this.health = cardInp.getHealth();
         this.mana = cardInp.getMana();
-        this.frozen = false;
+//        this.frozen = false;
     }
     abstract public void attack();
 
@@ -421,6 +606,12 @@ abstract class Card {
     public void setColors(ArrayList<String> colors) {
         this.colors = colors;
     }
+//    public void freezeCard(boolean value) {
+//        frozen = value;
+//    }
+//    public boolean isFrozen() {
+//        return frozen;
+//    }
 
 }
 
