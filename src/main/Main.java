@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import fileio.*;
 
 import javax.swing.*;
+import javax.swing.text.html.HTMLDocument;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Random;
 
+import static java.lang.System.exit;
 import static java.util.Collections.shuffle;
 import static java.util.Random.*;
 
@@ -101,14 +103,6 @@ public final class Main {
         ObjectWriter objectWriter = objectMapper.writerWithDefaultPrettyPrinter();
         objectWriter.writeValue(new File(filePath2), output);
     }
-//    static void setPlayersVariables(Player playerOne, Player playerTwo, Game gameEnv, GameInput gameInp) {
-//        playerOne.setChosenDeck(gameEnv.getDeckIndexPlayerOne(), gameEnv.getSeed());
-//        playerTwo.setChosenDeck(gameEnv.getDeckIndexPlayerTwo(), gameEnv.getSeed());
-//
-//        playerOne.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerOneHero()));
-//        playerTwo.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerTwoHero()));
-//
-//    }
 
     static private ObjectNode executeAction(ActionsInput iteratorAction, Game gameEnv, ObjectMapper objectMapper) throws JsonProcessingException {
 
@@ -234,28 +228,48 @@ class Player {
         // implementation of creating a card based on which type of it, the card is
         for (ArrayList<CardInput> currentDeckInp : decksInp) {
             for (CardInput currentCardInp : currentDeckInp) {
-                String type = TestCondition.typeOfCard(currentCardInp.getName());
-                Card newCard;
-                if (type.compareTo("Minion") == 0) {
-                    newCard = new Minion(currentCardInp);
-                } else {
-                    if (type.compareTo("Hero") == 0) {
-                        newCard = new Hero(currentCardInp);
-                    } else {
-                        if (type.compareTo("Environment") == 0) {
-                            newCard = new Environment(currentCardInp);
-                        } else {
-                            newCard = null;
-                            System.exit(69);
-                        }
-                    }
+//                String type = TestCondition.typeOfCard(currentCardInp.getName());
+                Card newCard = createTypeOfCard(currentCardInp);
+                if (newCard == null) {
+                    System.out.println("Invalid card name\n");
+                    exit(69);
                 }
+
                 allDecks.get(i).add(newCard);
             }
             i++;
         }
+    }
+    private Card createTypeOfCard(CardInput cardInput) {
+        String name = cardInput.getName();
+        if (name.compareTo("The Ripper") == 0)
+            return new TheRipper(cardInput, 'F'); //FRONT_ROWer
+        if (name.compareTo("Miraj") == 0)
+            return new Miraj(cardInput, 'F');
+        if (name.compareTo("Goliath") == 0 || name.compareTo("Warden") == 0)
+            return new Tank(cardInput, 'F');
+        if (name.compareTo("Sentinel") == 0 || name.compareTo("Berserker") == 0)
+            return new Minion(cardInput, 'B');
+        if (name.compareTo("The Cursed One") == 0)
+            return new TheCursedOne(cardInput, 'B');
+        if (name.compareTo("Disciple") == 0)
+            return new Disciple(cardInput, 'B');
+        if (name.compareTo("Firestorm") == 0)
+            return new Firestorm(cardInput);
+        if (name.compareTo("Winterfell") == 0)
+            return new Winterfell(cardInput);
+        if (name.compareTo("Heart Hound") == 0)
+            return new HeartHound(cardInput);
+        if (name.compareTo("Lord Royce") == 0)
+            return new LordRoyce(cardInput);
+        if (name.compareTo("Empress Thorina") == 0)
+            return new EmpressThorina(cardInput);
+        if (name.compareTo("King Mudface") == 0)
+            return new KingMudface(cardInput);
+        if (name.compareTo("General Kocioraw") == 0)
+            return new GeneralKociraw(cardInput);
 
-
+        return null;
     }
 
     public Hero getPlayerHero() {
@@ -294,12 +308,9 @@ class Player {
     }
 }
 
-class Environment extends Card {
+abstract class Environment extends Card {
     public Environment(CardInput cardInp) {
         super(cardInp);
-    }
-    public void attack (){
-
     }
 
 }
@@ -308,18 +319,22 @@ class Minion extends Card {
 
     private int health;
     private int attackDamage;
+    private char sittingRow;
 
 
-
-    public Minion(CardInput cardInp) {
+    public Minion(CardInput cardInp, char row) {
         super(cardInp);
         attackDamage = cardInp.getAttackDamage();
         health = cardInp.getHealth();
+        sittingRow = row;
     }
+
     public void attack () {
 
     }
-
+    public char findSittingRow() {
+        return sittingRow;
+    }
     public int getAttackDamage() {
         return attackDamage;
     }
@@ -371,9 +386,9 @@ abstract class Card {
     }
     abstract public void attack();
 
-    public void useAbility() {
-        System.out.println("You don't have an ability peasant");
-    }
+//    public void useAbility() {
+//        System.out.println("You don't have an ability peasant");
+//    }
 
     public String getName() {
         return name;
@@ -407,36 +422,130 @@ abstract class Card {
         this.colors = colors;
     }
 
-
-//    @Override
-//    public String toString() {
-//        return name + " ";
-//    }
 }
 
-abstract class TestCondition {
-    public static String typeOfCard(String name) {
-        if (name.compareTo("The Ripper") == 0 ||
-                name.compareTo("Miraj") == 0 ||
-                name.compareTo("Goliath") == 0 ||
-                name.compareTo("Warden") == 0 ||
-                name.compareTo("Sentinel") == 0 ||
-                name.compareTo("Berserker") == 0 ||
-                name.compareTo("The Cursed One") == 0 ||
-                name.compareTo("Disciple") == 0)
-            return "Minion";
+interface SpecialAbility {
+    public void useAbility();
+}
+class Miraj extends Minion implements SpecialAbility {
+    Miraj(CardInput cardInp, char row) {
+        super(cardInp, row);
+    }
 
-        if (name.compareTo("Firestorm") == 0 ||
-                name.compareTo("Winterfell") == 0 ||
-                name.compareTo("Heart Hound") == 0)
-            return "Environment";
+    public void useAbility() {
 
-        if (name.compareTo("Lord Royce") == 0 ||
-                name.compareTo("Empress Thorina") == 0 ||
-                name.compareTo("King Mudface") == 0||
-                name.compareTo("General Kocioraw") == 0)
-            return "Hero";
+    }
+}
 
-        return "Not a valid name";
+class TheRipper extends Minion implements SpecialAbility {
+    TheRipper(CardInput cardInp, char row) {
+        super(cardInp, row);
+    }
+
+    public void useAbility() {
+
+    }
+}
+
+class Disciple extends Minion implements SpecialAbility {
+    Disciple(CardInput cardInp, char row) {
+        super(cardInp, row);
+    }
+
+    public void useAbility() {
+
+    }
+}
+
+class TheCursedOne extends Minion implements SpecialAbility {
+    TheCursedOne(CardInput cardInp, char row) {
+        super(cardInp, row);
+    }
+
+    public void useAbility() {
+
+    }
+}
+
+class Tank extends Minion { // wrapper class for Goliath & Warden & other tanks if any
+    Tank(CardInput cardIn, char row) {
+        super(cardIn, row);
+    }
+}
+
+class Firestorm extends Environment {
+
+    public Firestorm(CardInput cardInput) {
+        super(cardInput);
+    }
+    @Override
+    public void attack() {
+
+    }
+}
+
+class Winterfell extends Environment {
+
+    public Winterfell(CardInput cardInput) {
+        super(cardInput);
+    }
+    @Override
+    public void attack() {
+
+    }
+}
+
+class HeartHound extends Environment {
+
+    public HeartHound(CardInput cardInput) {
+        super(cardInput);
+    }
+    @Override
+    public void attack() {
+
+    }
+}
+
+class LordRoyce extends Hero implements SpecialAbility {
+
+    public LordRoyce(CardInput cardInp) {
+        super(cardInp);
+    }
+    @Override
+    public void useAbility() {
+
+    }
+}
+
+class EmpressThorina extends Hero implements SpecialAbility {
+
+    public EmpressThorina(CardInput cardInp) {
+        super(cardInp);
+    }
+    @Override
+    public void useAbility() {
+
+    }
+}
+
+class KingMudface extends Hero implements SpecialAbility {
+
+    public KingMudface(CardInput cardInp) {
+        super(cardInp);
+    }
+    @Override
+    public void useAbility() {
+
+    }
+}
+
+class GeneralKociraw extends Hero implements SpecialAbility {
+
+    public GeneralKociraw(CardInput cardInp) {
+        super(cardInp);
+    }
+    @Override
+    public void useAbility() {
+
     }
 }
