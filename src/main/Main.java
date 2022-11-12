@@ -2,6 +2,7 @@ package main;
 
 import checker.Checker;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -85,45 +86,48 @@ public final class Main {
 
         for (GameInput currentGame : inputData.getGames()) {
             Game gameEnv = new Game(currentGame.getStartGame(), playerOne, playerTwo);
-            setPlayersVariables(playerOne, playerTwo, gameEnv, currentGame);
+//            gameEnv.setGameStart(currentGame);
+
 
             ArrayList<ActionsInput> actionsInp = currentGame.getActions();
+
             for (ActionsInput iteratorAction : actionsInp) {
                 ObjectNode printResult = executeAction(iteratorAction, gameEnv, objectMapper);
                 output.add(printResult);
-
             }
-//            output.addObject(playerOne.getPlayerHero());
 
         }
 
         ObjectWriter objectWriter = objectMapper.writerWithDefaultPrettyPrinter();
         objectWriter.writeValue(new File(filePath2), output);
     }
-    static void setPlayersVariables(Player playerOne, Player playerTwo, Game gameEnv, GameInput gameInp) {
-        playerOne.setChosenDeck(gameEnv.getDeckIndexPlayerOne(), gameEnv.getSeed());
-        playerTwo.setChosenDeck(gameEnv.getDeckIndexPlayerTwo(), gameEnv.getSeed());
+//    static void setPlayersVariables(Player playerOne, Player playerTwo, Game gameEnv, GameInput gameInp) {
+//        playerOne.setChosenDeck(gameEnv.getDeckIndexPlayerOne(), gameEnv.getSeed());
+//        playerTwo.setChosenDeck(gameEnv.getDeckIndexPlayerTwo(), gameEnv.getSeed());
+//
+//        playerOne.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerOneHero()));
+//        playerTwo.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerTwoHero()));
+//
+//    }
 
-        playerOne.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerOneHero()));
-        playerTwo.setPlayerHero(new Hero(gameInp.getStartGame().getPlayerTwoHero()));
-
-    }
-
-    static ObjectNode executeAction(ActionsInput iteratorAction, Game gameEnv, ObjectMapper objectMapper) {
+    static private ObjectNode executeAction(ActionsInput iteratorAction, Game gameEnv, ObjectMapper objectMapper) throws JsonProcessingException {
 
         ObjectNode resultForPrint = objectMapper.createObjectNode();
+        int playerIndex = iteratorAction.getPlayerIdx();
         resultForPrint.put("command", iteratorAction.getCommand());
+
         if (iteratorAction.getCommand().compareTo("getPlayerTurn") == 0) {
             resultForPrint.put("output", gameEnv.getPlayerTurn());
         }
 
         if (iteratorAction.getCommand().compareTo("getPlayerHero") == 0) {
-            int playerIndex = iteratorAction.getPlayerIdx();
+            Hero hero = gameEnv.getPlayer(playerIndex).getPlayerHero();
             resultForPrint.put("playerIdx", playerIndex);
-//            ObjectNode heroSpecs = objectMapper.createObjectNode();
-            resultForPrint.put("output", String.valueOf(gameEnv.getPlayer(playerIndex).getPlayerHero()));
-//            heroSpecs.put("")
-//            resultsForPrint.put("output", String.valueOf(gameEnv.getPlayer(iteratorAction.getPlayerIdx()).getPlayerHero()));
+            resultForPrint.putPOJO("output", hero);
+        }
+        if (iteratorAction.getCommand().compareTo("getPlayerDeck") == 0) {
+            resultForPrint.put("playerIdx", playerIndex);
+            resultForPrint.putPOJO("output", gameEnv.getPlayer(playerIndex).getChosenDeck());
         }
         return resultForPrint;
     }
@@ -148,6 +152,16 @@ class Game {
         playerTurn = gameInp.getStartingPlayer();
         this.playerOne = playerOne;
         this.playerTwo = playerTwo;
+
+        playerOne.setChosenDeck(gameInp.getPlayerOneDeckIdx(), gameInp.getShuffleSeed());
+        playerTwo.setChosenDeck(gameInp.getPlayerTwoDeckIdx(), gameInp.getShuffleSeed());
+
+        playerOne.setPlayerHero(new Hero(gameInp.getPlayerOneHero()));
+        playerTwo.setPlayerHero(new Hero(gameInp.getPlayerTwoHero()));
+
+        playerOne.addCardInHand(playerOne.getChosenDeck().remove(0));
+        playerTwo.addCardInHand(playerTwo.getChosenDeck().remove(0));
+
     }
     public Card[][] getTable() {
         return table;
@@ -176,6 +190,10 @@ class Game {
         return playerTurn;
     }
 
+//    "endPlayerTurn"
+    public void endPlayerTurn() { //TODO adaugat mana
+        playerTurn = ((playerTurn == 1) ? 2 : 1);
+    }
     public Player getPlayer(int index) {
         if (index == 1)
             return playerOne;
@@ -270,8 +288,8 @@ class Player {
     public void setChosenDeck(int indexDeck, int seed) {
         this.chosenDeck = new ArrayList<Card>(allDecks.get(indexDeck));
 
-        Random randomer = new Random(seed);
-        Collections.shuffle(chosenDeck, randomer);
+//        Random randomer = new Random(seed);
+        Collections.shuffle(chosenDeck, new Random(seed));
 
     }
 }
@@ -288,24 +306,50 @@ class Environment extends Card {
 
 class Minion extends Card {
 
+    private int health;
     private int attackDamage;
+
+
+
     public Minion(CardInput cardInp) {
         super(cardInp);
         attackDamage = cardInp.getAttackDamage();
+        health = cardInp.getHealth();
     }
     public void attack () {
 
     }
+
+    public int getAttackDamage() {
+        return attackDamage;
+    }
+    public void setAttackDamage(int attackDamage) {
+        this.attackDamage = attackDamage;
+    }
+    public int getHealth() {
+        return health;
+    }
+    public void setHealth(int health) {
+        this.health = health;
+    }
 }
 
 class Hero extends Card {
+    private int health;
     public Hero(CardInput cardInp) {
         super(cardInp);
-        setHealth(30);
+        health = 30;
     }
     @Override
     public void attack() {
 
+    }
+    public int getHealth() {
+        return health;
+    }
+
+    public void setHealth(int health) {
+        this.health = health;
     }
 
 }
@@ -315,14 +359,13 @@ abstract class Card {
     private String description;
     private ArrayList<String> colors;
     private String name;
-    private int health;
     private boolean frozen;
 
     Card(CardInput cardInp) { // shallow copy
         this.name = cardInp.getName();
         this.colors = cardInp.getColors();
         this.description = cardInp.getDescription();
-        this.health = cardInp.getHealth();
+//        this.health = cardInp.getHealth();
         this.mana = cardInp.getMana();
         this.frozen = false;
     }
@@ -334,10 +377,6 @@ abstract class Card {
 
     public String getName() {
         return name;
-    }
-
-    public int getHealth() {
-        return health;
     }
 
     public String getDescription() {
@@ -356,10 +395,6 @@ abstract class Card {
         this.name = name;
     }
 
-    public void setHealth(int health) {
-        this.health = health;
-    }
-
     public void setDescription(String description) {
         this.description = description;
     }
@@ -372,10 +407,11 @@ abstract class Card {
         this.colors = colors;
     }
 
-    @Override
-    public String toString() {
-        return name + " ";
-    }
+
+//    @Override
+//    public String toString() {
+//        return name + " ";
+//    }
 }
 
 abstract class TestCondition {
