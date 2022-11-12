@@ -1,1 +1,84 @@
-[ "ActionsInput{command='getPlayerDeck', handIdx=0, cardAttacker=null, cardAttacked=null, affectedRow=0, playerIdx=2, x=0, y=0}" ]
+[ {
+  "command" : "getPlayerDeck",
+  "playerIdx" : 2,
+  "output" : [ {
+    "mana" : 5,
+    "description" : "Premium card: Insanity is always an option, now it is an absolute.",
+    "colors" : [ "Yellow", "Orange", "Red" ],
+    "name" : "Miraj",
+    "health" : 4,
+    "attackDamage" : 4
+  }, {
+    "mana" : 2,
+    "description" : "Premium card: Nobody suspects an outcast, not even the Gods.",
+    "colors" : [ "Black", "White", "Red" ],
+    "name" : "The Cursed One",
+    "health" : 3,
+    "attackDamage" : 0
+  }, {
+    "mana" : 2,
+    "description" : "Premium card: All is white. My mouth is frozen and I must scream.",
+    "colors" : [ "White", "Blue" ],
+    "name" : "Winterfell"
+  }, {
+    "mana" : 3,
+    "description" : "Premium card: You shall not pass, you shall not prevail, you shall perish.",
+    "colors" : [ "Brown", "Blue" ],
+    "name" : "Warden",
+    "health" : 5,
+    "attackDamage" : 3
+  } ]
+}, {
+  "command" : "getPlayerDeck",
+  "playerIdx" : 1,
+  "output" : [ {
+    "mana" : 3,
+    "description" : "Standard card: Everything is sacred to him, all is but a gift from the saints.",
+    "colors" : [ "Yellow", "White" ],
+    "name" : "Disciple",
+    "health" : 4,
+    "attackDamage" : 0
+  }, {
+    "mana" : 1,
+    "description" : "Standard card: The days are cold and so are we. We hope we can close our eyes again.",
+    "colors" : [ "White", "Grey", "Black" ],
+    "name" : "Winterfell"
+  }, {
+    "mana" : 2,
+    "description" : "Standard card: Trained by the best, nothing will catch him off-guard.",
+    "colors" : [ "Black", "White" ],
+    "name" : "Sentinel",
+    "health" : 3,
+    "attackDamage" : 2
+  }, {
+    "mana" : 4,
+    "description" : "Premium card: No matter how many, his body will fight. Save your breath for the Mountain is strong.",
+    "colors" : [ "Red", "Purple" ],
+    "name" : "Goliath",
+    "health" : 7,
+    "attackDamage" : 1
+  } ]
+}, {
+  "command" : "getPlayerHero",
+  "playerIdx" : 1,
+  "output" : {
+    "mana" : 2,
+    "description" : "Premium card: An army is not sufficient, he is ready obliterate, it is time for chaos.",
+    "colors" : [ "Red", "Black", "Purple" ],
+    "name" : "General Kocioraw",
+    "health" : 30
+  }
+}, {
+  "command" : "getPlayerHero",
+  "playerIdx" : 2,
+  "output" : {
+    "mana" : 2,
+    "description" : "Premium card: Time to show who we are, the low-class was never scared of you.",
+    "colors" : [ "Brown", "Pink", "Purple" ],
+    "name" : "King Mudface",
+    "health" : 30
+  }
+}, {
+  "command" : "getPlayerTurn",
+  "output" : 2
+} ]
