@@ -10,11 +10,8 @@ import checker.CheckerConstants;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import fileio.*;
 
-import javax.swing.*;
-import javax.swing.text.html.HTMLDocument;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,7 +23,6 @@ import java.util.Random;
 import static java.lang.System.exit;
 import static java.util.Collections.min;
 import static java.util.Collections.shuffle;
-import static java.util.Random.*;
 
 /**
  * The entry point to this homework. It runs the checker that tests your implentation.
@@ -111,7 +107,7 @@ public final class Main {
         ObjectNode resultForPrint = objectMapper.createObjectNode();
         int playerIndex = iteratorAction.getPlayerIdx();
         int handIndex = iteratorAction.getHandIdx();
-
+        int rowIndex = iteratorAction.getAffectedRow();
 
         if (iteratorAction.getCommand().compareTo("getPlayerTurn") == 0) {
             resultForPrint.put("command", iteratorAction.getCommand());
@@ -133,7 +129,7 @@ public final class Main {
             String error = gameEnv.placeCard(handIndex);
             if (error != null) {
                 resultForPrint.put("command", iteratorAction.getCommand());
-                resultForPrint.put("handIdx", 0);
+                resultForPrint.put("handIdx", handIndex);
                 resultForPrint.put("error", error);
             }
         }
@@ -154,6 +150,17 @@ public final class Main {
             resultForPrint.put("playerIdx", playerIndex);
             resultForPrint.put("output", gameEnv.getPlayer(playerIndex).getMana());
         }
+        if (iteratorAction.getCommand().compareTo("useEnvironmentCard") == 0) {
+            String error = gameEnv.useEnvironmentCard(handIndex, rowIndex);
+            if (error != null) {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.put("handIdx", handIndex);
+                resultForPrint.put("affectedRow", rowIndex);
+                resultForPrint.put("error", error);
+            }
+
+        }
+//        if (iteratorAction.getCommand().compareTo(""))
         return resultForPrint;
     }
 }
@@ -204,6 +211,7 @@ class Game {
     private int nrRound = 1;
     private int playerStarting;
 
+    private int affectedRow;
 
     public Game(StartGameInput gameInp, Player playerOne, Player playerTwo) {
         seed = gameInp.getShuffleSeed();
@@ -378,6 +386,32 @@ class Game {
             return getPlayer(playerIdx).getCardsInHand();
     }
 
+    public String useEnvironmentCard(int handIdx, int affectedRow) {
+        this.affectedRow = affectedRow;
+        Card card = getPlayer(playerTurn).getCardsInHand().get(handIdx);
+        if (card instanceof Environment) {
+            if (getPlayer(playerTurn).getMana() < card.getMana())
+                return "Not enough mana to place card on table.";
+            if (playerTurn == 2 && (affectedRow == 0 || affectedRow == 1))
+                return "Chosen row does not belong to the enemy.";
+            if (playerTurn == 1 && (affectedRow == 2 || affectedRow == 3))
+                return "Chosen row does not belong to the enemy.";
+
+            String error = ((Environment)card).useAbility(this);
+            if (error != null)
+                getPlayer(playerTurn).getCardsInHand().remove(handIdx); // deleting card after use
+            return error;
+        } else
+            return "Chosen card is not of type environment.";
+    }
+    public int getAffectedRow() {
+        return affectedRow;
+    }
+
+    public void setAffectedRow(int affectedRow) {
+        this.affectedRow = affectedRow;
+    }
+
 }
 
 class Player {
@@ -493,9 +527,12 @@ class Player {
     }
 }
 
-abstract class Environment extends Card {
+abstract class Environment extends Card implements SpecialAbility {
     public Environment(CardInput cardInp) {
         super(cardInp);
+    }
+    @Override
+    public void attack() {
     }
 
 }
@@ -616,44 +653,45 @@ abstract class Card {
 }
 
 interface SpecialAbility {
-    public void useAbility();
+    //return value = error
+    public String useAbility(Game gameEnv);
 }
-class Miraj extends Minion implements SpecialAbility {
+class Miraj extends Minion {
     Miraj(CardInput cardInp, char row) {
         super(cardInp, row);
     }
 
-    public void useAbility() {
+    public void useAbility(Game gameEnv) {
 
     }
 }
 
-class TheRipper extends Minion implements SpecialAbility {
+class TheRipper extends Minion {
     TheRipper(CardInput cardInp, char row) {
         super(cardInp, row);
     }
 
-    public void useAbility() {
+    public void useAbility(Game gameEnv) {
 
     }
 }
 
-class Disciple extends Minion implements SpecialAbility {
+class Disciple extends Minion {
     Disciple(CardInput cardInp, char row) {
         super(cardInp, row);
     }
 
-    public void useAbility() {
+    public void useAbility(Game gameEnv) {
 
     }
 }
 
-class TheCursedOne extends Minion implements SpecialAbility {
+class TheCursedOne extends Minion {
     TheCursedOne(CardInput cardInp, char row) {
         super(cardInp, row);
     }
 
-    public void useAbility() {
+    public void useAbility(Game gameEnv) {
 
     }
 }
@@ -670,9 +708,21 @@ class Firestorm extends Environment {
         super(cardInput);
     }
     @Override
-    public void attack() {
+    public String useAbility(Game gameEnv) {
+//        if (gameEnv.getAffectedRow())
+        int affectedRow = gameEnv.getAffectedRow();
+        int playerTurn = gameEnv.getPlayerTurn();
+        Player player = gameEnv.getPlayer(playerTurn);
 
+        //TODO
+        for (int j = 0; j < 5; j++) {
+            Minion affectedCard = (Minion)gameEnv.getElem(affectedRow,j);
+            if (affectedCard != null)
+                affectedCard.setHealth(affectedCard.getHealth() - 1);
+        }
+        return null;
     }
+
 }
 
 class Winterfell extends Environment {
@@ -680,20 +730,21 @@ class Winterfell extends Environment {
     public Winterfell(CardInput cardInput) {
         super(cardInput);
     }
-    @Override
-    public void attack() {
 
+    @Override
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
 
-class HeartHound extends Environment {
+class HeartHound extends Environment{
 
     public HeartHound(CardInput cardInput) {
         super(cardInput);
     }
     @Override
-    public void attack() {
-
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
 
@@ -703,8 +754,8 @@ class LordRoyce extends Hero implements SpecialAbility {
         super(cardInp);
     }
     @Override
-    public void useAbility() {
-
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
 
@@ -714,8 +765,8 @@ class EmpressThorina extends Hero implements SpecialAbility {
         super(cardInp);
     }
     @Override
-    public void useAbility() {
-
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
 
@@ -725,8 +776,8 @@ class KingMudface extends Hero implements SpecialAbility {
         super(cardInp);
     }
     @Override
-    public void useAbility() {
-
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
 
@@ -736,7 +787,7 @@ class GeneralKociraw extends Hero implements SpecialAbility {
         super(cardInp);
     }
     @Override
-    public void useAbility() {
-
+    public String useAbility(Game gameEnv) {
+        return null;
     }
 }
