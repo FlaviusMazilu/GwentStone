@@ -1,4 +1,5 @@
 package main;
+
 import checker.Checker;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,7 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Random;
-
+// @formatter:on
 import static java.lang.System.exit;
 import static java.util.Collections.min;
 import static java.util.Collections.shuffle;
@@ -36,6 +37,7 @@ public final class Main {
     /**
      * DO NOT MODIFY MAIN METHOD
      * Call the checker
+     *
      * @param args from command line
      * @throws IOException in case of exceptions to reading / writing
      */
@@ -136,7 +138,18 @@ public final class Main {
         if (iteratorAction.getCommand().compareTo("getCardsInHand") == 0) {
             resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.put("playerIdx", playerIndex);
-            resultForPrint.putPOJO("output", new ArrayList<Card>(gameEnv.getCardsInHand(playerIndex)));
+            ArrayList<Card> list = new ArrayList<Card>();
+            for (Card card : gameEnv.getCardsInHand(playerIndex)) {
+                Minion auxCard;
+                //ROMANEASCA FACUTA --> to change
+                if (card instanceof Minion) {
+                    auxCard = new Minion((Minion) card);
+                    list.add(auxCard);
+                } else {
+                    list.add(card);
+                }
+            }
+            resultForPrint.putPOJO("output", list);
         }
         if (iteratorAction.getCommand().compareTo("getCardsOnTable") == 0) {
             resultForPrint.put("command", iteratorAction.getCommand());
@@ -166,45 +179,52 @@ public final class Main {
             int y = iteratorAction.getY();
 
             resultForPrint.put("command", iteratorAction.getCommand());
-            Card cardAtPos = gameEnv.getTable().getCardAtPosition(x,y);
+            Card cardAtPos = gameEnv.getTable().getCardAtPosition(x, y);
             if (cardAtPos != null) {
-                resultForPrint.putPOJO("output", new Minion((Minion)cardAtPos));
-                resultForPrint.put("x", x);
-                resultForPrint.put("y", y);
+                resultForPrint.putPOJO("output", new Minion((Minion) cardAtPos));
+
             } else {
-                resultForPrint.put("error", "No card at position");
+                resultForPrint.put("output", "No card available at that position.");
             }
+            resultForPrint.put("x", x);
+            resultForPrint.put("y", y);
         }
         if (iteratorAction.getCommand().compareTo("getFrozenCardsOnTable") == 0) {
             resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.putPOJO("output", gameEnv.getTable().getFrozenCardsOnTable());
         }
-//        if (iteratorAction.getCommand().compareTo(""))
+        if (iteratorAction.getCommand().compareTo("cardUsesAttack") == 0) {
+            String error = gameEnv.cardUsesAttack(iteratorAction);
+            if (error != null) {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.putPOJO("cardAttacker", iteratorAction.getCardAttacker());
+                resultForPrint.putPOJO("cardAttacked", iteratorAction.getCardAttacked());
+                resultForPrint.put("error", error);
+            }
+
+        }
         return resultForPrint;
     }
 }
+
 class Table {
     private Minion[][] table;
-//    private boolean[][] freezeStatus;
 
     public Table() {
-        table = new Minion[4][5];
-//        freezeStatus = new boolean[4][5];
+        table = new Minion[Cons.nrRows][Cons.nrCols];
     }
 
     public Minion getEntry(int i, int j) {
         return table[i][j];
     }
+
     public void setEntry(int i, int j, Minion card) {
         table[i][j] = card;
     }
-//    public boolean getFreezeStatus(int i, int j) {
-//        return freezeStatus[i][j];
-//    }
 
     public ArrayList<ArrayList<Card>> printTable() {
-        ArrayList<ArrayList<Card>>cardsOnTable = new ArrayList<>();
-        for (int i = 0 ; i < 4; i++) {
+        ArrayList<ArrayList<Card>> cardsOnTable = new ArrayList<>();
+        for (int i = 0; i < Cons.nrRows; i++) {
             cardsOnTable.add(new ArrayList<Card>());
             for (int j = 0; j < 5; j++) {
                 if (table[i][j] != null)
@@ -219,10 +239,10 @@ class Table {
         table[i][j] = null;
 
         //shift them to the left
-        for (int k = j; k < 4; k++) {
+        for (int k = j; k < Cons.nrCols - 1; k++) {
             table[i][k] = table[i][k + 1];
         }
-        for (int k = 4; k >=0; k--) {
+        for (int k = Cons.nrCols - 1; k >= 0; k--) {
             if (table[i][k] != null) {
                 table[i][k] = null;
                 break;
@@ -230,24 +250,53 @@ class Table {
         }
         return aux;
     }
+
     public Card getCardAtPosition(int x, int y) {
         return table[x][y];
     }
 
     public ArrayList<Card> getFrozenCardsOnTable() {
         ArrayList<Card> frozenCardsList = new ArrayList<>();
-        for (int i = 0; i < 4; i ++) {
-            for (int j = 0; j < 5; j ++) {
+        for (int i = 0; i < Cons.nrRows; i++) {
+            for (int j = 0; j < Cons.nrCols; j++) {
                 if (table[i][j] != null && table[i][j].findFreezeStatus())
                     frozenCardsList.add(table[i][j]);
             }
         }
         return frozenCardsList;
     }
+
+    public boolean existTank(int playerIdx) {
+        int i;
+        if (playerIdx == 2)
+            i = Cons.player2Front;
+        else
+            i = Cons.player1Front;
+        for (int j = 0; j < Cons.nrCols; j++) {
+            if (table[i][j] instanceof Tank)
+                return true;
+        }
+        return false;
+    }
+
+    public void markCardAbleAttack(int playerIdx) {
+        int i, k;
+        if (playerIdx == 1) {
+            i = Cons.player1Front;
+            k = Cons.player1Back;
+        } else {
+            i = Cons.player2Back;
+            k = Cons.player2Front;
+        }
+        for (; i <= k; i++) {
+            for (int j = 0; j < Cons.nrCols; j++)
+                if (table[i][j] != null)
+                    table[i][j].setAttackUsed(false);
+        }
+    }
 }
+
 class Game {
-
-
     private Player playerOne;
     private Table table = new Table();
     private Player playerTwo;
@@ -286,25 +335,18 @@ class Game {
 
     }
 
+    //TODO to remove->redundant
     public Card getElem(int i, int j) {
-        return table.getEntry(i,j);
+        return table.getEntry(i, j);
     }
-    public int getSeed() {
-        return seed;
-    }
-    public int getDeckIndexPlayerOne() {
-        return deckIndexPlayerOne;
-    }
-    public int getDeckIndexPlayerTwo() {
-        return deckIndexPlayerTwo;
-    }
+
     public int getPlayerTurn() {
         return playerTurn;
     }
 
-//    "endPlayerTurn"
     public void endPlayerTurn() {
         unfreezePlayerCards(playerTurn);
+        table.markCardAbleAttack(playerTurn);
 
         playerTurn = ((playerTurn == 1) ? 2 : 1);
         if (playerTurn == playerStarting) {
@@ -313,22 +355,24 @@ class Game {
             startNewRound();
         }
     }
+    // TODO move func to table
     private void unfreezePlayerCards(int indexPlayer) {
-        int i,j;
-        if (indexPlayer == 2) {
-            i = 0;
-            j = 2;
+        int i, j, k;
+        if (indexPlayer == Cons.player2) {
+            i = Cons.player2Back;
+            k = Cons.player2Front;
         } else {
-            i = 2;
-            j = 4;
+            i = Cons.player1Front;
+            k = Cons.player1Back;
         }
-        for (; i < 2; i++) {
-            for (; j < 5; j++) {
-                if (table.getEntry(i,j) != null)
-                    table.getEntry(i,j).freeze(false);
+        for (; i <= k ; i++) {
+            for (j = 0; j < 5; j++) {
+                if (table.getEntry(i, j) != null)
+                    table.getEntry(i, j).freeze(false);
             }
         }
     }
+
     private void startNewRound() {
         int aux = playerOne.getMana();
         playerOne.setMana(aux + Math.min(nrRound, 10));
@@ -374,24 +418,25 @@ class Game {
         if (player.getMana() < card.getMana()) {
             return "Not enough mana to place card on table.";
         }
-        if (cardsOnRowCounter(((Minion)card).findSittingRow(), playerTurn) == 5) {
+        if (cardsOnRowCounter(((Minion) card).findSittingRow(), playerTurn) == 5) {
             return "Cannot place card on table since row is full.";
         }
         card = handCards.remove(handIndex); // removes the card from the hand
-        placeCardOnRow((Minion)card, playerTurn);
+        placeCardOnRow((Minion) card, playerTurn);
         int aux = player.getMana();
         player.setMana(aux - card.getMana());
         //it's no error
         return null;
     }
+    //TODO move to table
     public int cardsOnRowCounter(char row, int indexPlayer) {
         int i = findNeededRow(indexPlayer, row);
-        
+
         if (i == -1) {
             System.out.println("checkIfRowFull error");
             exit(100);
         }
-        
+
         int count = 0;
         for (int j = 0; j < 5; j++) {
             if (table.getEntry(i, j) != null)
@@ -399,18 +444,19 @@ class Game {
         }
         return count;
     }
-
+    //TODO move to table
     public void placeCardOnRow(Minion card, int playerIdx) {
         int i = findNeededRow(playerIdx, card.findSittingRow());
         int j = 0;
         for (j = 0; j < 5; j++) {
-            if (table.getEntry(i,j) == null)
+            if (table.getEntry(i, j) == null)
                 break;
         }
         table.setEntry(i, j, card);
     }
 
     //finds the row according to the type of card(sits Front or Back) and to the player index
+    //TODO maybe move to table
     private int findNeededRow(int playerIdx, char rowPos) {
         if (playerIdx == 2 && rowPos == 'F')
             return 1;
@@ -423,18 +469,17 @@ class Game {
         return -1;
     }
     //TODO
-//    public boolean checkIfCanAttackRow() {
-//
-//    }
 
     public ArrayList<ArrayList<Card>> getCardsOnTable() {
         return table.printTable();
     }
+
     public Table getTable() {
         return table;
     }
+
     public ArrayList<Card> getCardsInHand(int playerIdx) {
-            return getPlayer(playerIdx).getCardsInHand();
+        return getPlayer(playerIdx).getCardsInHand();
     }
 
     public String useEnvironmentCard(int handIdx, int affectedRow) {
@@ -449,14 +494,14 @@ class Game {
             if (playerTurn == 1 && (affectedRow == 2 || affectedRow == 3))
                 return "Chosen row does not belong to the enemy.";
 
-            String error = ((Environment)card).useAbility(this);
+            String error = ((Environment) card).useAbility(this);
             if (error == null) {
                 player.setMana(player.getMana() - card.getMana());
                 getPlayer(playerTurn).getCardsInHand().remove(handIdx); // deleting card after use
             }
             for (int j = 0; j < 5; j++) {
-                if (table.getEntry(affectedRow,j) != null)
-                    if (table.getEntry(affectedRow,j).getHealth() == 0)
+                if (table.getEntry(affectedRow, j) != null)
+                    if (table.getEntry(affectedRow, j).getHealth() == 0)
                         table.removeCard(affectedRow, j);
             }
             //there is no error and the card was used
@@ -464,23 +509,50 @@ class Game {
         } else
             return "Chosen card is not of type environment.";
     }
+
     public int getAffectedRow() {
         return affectedRow;
     }
 
-    public void setAffectedRow(int affectedRow) {
-        this.affectedRow = affectedRow;
+    public String cardUsesAttack(ActionsInput actionsInput) {
+        int x = actionsInput.getCardAttacker().getX();
+        int y = actionsInput.getCardAttacker().getY();
+        Minion attacker = table.getEntry(x, y);
+
+        x = actionsInput.getCardAttacked().getX();
+        y = actionsInput.getCardAttacked().getY();
+        Minion attacked = table.getEntry(x, y);
+
+        if (attacker == null || attacked == null)
+            return "Not a valid attacker/attacked Card";
+
+        if (!belongToEnemy(x))
+            return "Attacked card does not belong to the enemy.";
+        if (attacker.checkIfAttacked())
+            return "Attacker card has already attacked this turn.";
+        if (attacker.findFreezeStatus())
+            return "Attacker card is frozen.";
+
+        int enemyIdx = ((playerTurn == 1) ? 2 : 1);
+        // if exist at least one tank and the attacked is not a tank
+        if (table.existTank(enemyIdx))
+                if (!(attacked instanceof Tank))
+            return "Attacked card is not of type 'Tank'.";
+
+        attacker.attack(attacker, attacked);
+        if (attacked.getHealth() <= 0)
+            table.removeCard(x, y);
+        return null;
+    }
+    private boolean belongToEnemy(int x) {
+        int enemyIdx = ((playerTurn == 1) ? 2 : 1);
+        if (enemyIdx == Cons.player1 && x != Cons.player1Front && x != Cons.player1Back)
+            return false;
+        if (enemyIdx == Cons.player2 && x != Cons.player2Back && x != Cons.player2Front)
+            return false;
+        return true;
     }
 
-//    public ArrayList<Card> getEnvironmentCardsInHand(int playerIdx) {
-//        ArrayList<Card> cardsInHand = getCardsInHand(playerIdx);
-//        ArrayList<Card> environmentCards = new ArrayList<>();
-//        for (Card card : cardsInHand) {
-//            if (card instanceof Environment)
-//                environmentCards.add(card);
-//        }
-//        return environmentCards;
-//    }
 }
 
 class Player {
@@ -522,6 +594,7 @@ class Player {
             i++;
         }
     }
+
     private Card createTypeOfCard(CardInput cardInput) {
         String name = cardInput.getName();
         if (name.compareTo("The Ripper") == 0)
@@ -561,6 +634,7 @@ class Player {
     public void setPlayerHero(Hero playerHero) {
         this.playerHero = playerHero;
     }
+
     public int getScor() {
         return score;
     }
@@ -582,7 +656,6 @@ class Player {
     }
 
     public void setChosenDeck(Input inputData, int playerIdx, int deckIdx, int seed) {
-        //TODO modify back index and mana
         this.chosenDeck = new ArrayList<Card>();
 
         DecksInput deckInp;
@@ -595,10 +668,10 @@ class Player {
             Card newCard = createTypeOfCard(currentCardInp);
             chosenDeck.add(newCard);
         }
-//        chosenDeck.get(0).setMana(99);
 //        System.out.println(chosenDeck.get(0).getMana() + " " + allDecks.get(0).get(0).getMana());
         Collections.shuffle(chosenDeck, new Random(seed));
     }
+
     public int getMana() {
         return mana;
     }
@@ -621,8 +694,9 @@ abstract class Environment extends Card implements SpecialAbility {
     public Environment(CardInput cardInp) {
         super(cardInp);
     }
-    @Override
-    public void attack() {
+
+    public String attack() {
+        return null;
     }
 
     public String useAbility(Game gameEnv) {
@@ -638,47 +712,66 @@ class Minion extends Card {
     private char sittingRow;
     private boolean freezeStatus;
 
+    private boolean attackUse;
+
+    public boolean checkIfAttacked() {
+        return attackUse;
+    }
+    public void setAttackUsed(boolean status) {
+        attackUse = status;
+    }
     public Minion(CardInput cardInp, char row) {
         super(cardInp);
         attackDamage = cardInp.getAttackDamage();
         health = cardInp.getHealth();
         sittingRow = row;
     }
+
     public Minion(Minion minion) {
         health = minion.getHealth();
         attackDamage = minion.getAttackDamage();
         sittingRow = minion.findSittingRow();
         freezeStatus = minion.findFreezeStatus();
+        attackUse = minion.attackUse;
         super.setName(minion.getName());
         super.setDescription(minion.getDescription());
         super.setColors(minion.getColors());
         super.setMana(minion.getMana());
     }
+
     public Minion() {
 
     }
 
-    public void attack () {
-
+    public void attack(Minion attacker, Minion attacked) {
+        attacked.setHealth(attacked.getHealth() - attacker.getAttackDamage());
+        attacker.attackUse = true;
     }
+
     public char findSittingRow() {
         return sittingRow;
     }
+
     public void freeze(boolean status) {
         freezeStatus = status;
     }
+
     public boolean findFreezeStatus() {
         return freezeStatus;
     }
+
     public int getAttackDamage() {
         return attackDamage;
     }
+
     public void setAttackDamage(int attackDamage) {
         this.attackDamage = attackDamage;
     }
+
     public int getHealth() {
         return health;
     }
+
     public void setHealth(int health) {
         this.health = health;
     }
@@ -686,14 +779,17 @@ class Minion extends Card {
 
 class Hero extends Card {
     private int health;
+
     public Hero(CardInput cardInp) {
         super(cardInp);
         health = 30;
     }
-    @Override
-    public void attack() {
 
+    public String attack() {
+
+        return null;
     }
+
     public int getHealth() {
         return health;
     }
@@ -714,15 +810,14 @@ abstract class Card {
         this.name = cardInp.getName();
         this.colors = cardInp.getColors();
         this.description = cardInp.getDescription();
-//        this.health = cardInp.getHealth();
         this.mana = cardInp.getMana();
-//        this.frozen = false;
     }
+
     public Card() {
 
     }
-
-    abstract public void attack();
+        // TODO resolve the problem here
+//    abstract public String attack();
 
 //    public void useAbility() {
 //        System.out.println("You don't have an ability peasant");
@@ -759,12 +854,7 @@ abstract class Card {
     public void setColors(ArrayList<String> colors) {
         this.colors = colors;
     }
-//    public void freezeCard(boolean value) {
-//        frozen = value;
-//    }
-//    public boolean isFrozen() {
-//        return frozen;
-//    }
+
 
 }
 
@@ -772,6 +862,7 @@ interface SpecialAbility {
     //return value = error
     public String useAbility(Game gameEnv);
 }
+
 class Miraj extends Minion {
     Miraj(CardInput cardInp, char row) {
         super(cardInp, row);
@@ -823,6 +914,7 @@ class Firestorm extends Environment {
     public Firestorm(CardInput cardInput) {
         super(cardInput);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         int affectedRow = gameEnv.getAffectedRow();
@@ -830,7 +922,7 @@ class Firestorm extends Environment {
         Player player = gameEnv.getPlayer(playerTurn);
 
         for (int j = 0; j < 5; j++) {
-            Minion affectedCard = (Minion)gameEnv.getElem(affectedRow,j);
+            Minion affectedCard = (Minion) gameEnv.getElem(affectedRow, j);
             if (affectedCard != null) {
                 int aux = affectedCard.getHealth();
                 affectedCard.setHealth(aux - 1);
@@ -852,19 +944,19 @@ class Winterfell extends Environment {
         int affectedRow = gameEnv.getAffectedRow();
 
         for (int j = 0; j < 5; j++)
-            if (gameEnv.getTable().getEntry(affectedRow,j) != null)
-                gameEnv.getTable().getEntry(affectedRow,j).freeze(true);
-//            gameEnv.getTable().setFreezeStatus(affectedRow, j, true);
+            if (gameEnv.getTable().getEntry(affectedRow, j) != null)
+                gameEnv.getTable().getEntry(affectedRow, j).freeze(true);
 
         return null;
     }
 }
 
-class HeartHound extends Environment{
+class HeartHound extends Environment {
 
     public HeartHound(CardInput cardInput) {
         super(cardInput);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         int playerIdx = gameEnv.getPlayerTurn();
@@ -873,21 +965,21 @@ class HeartHound extends Environment{
         int affectedColumn = 0;
 
         for (int j = 0; j < 5; j++) {
-            Minion itrCard = (Minion)gameEnv.getElem(affectedRow, j);
+            Minion itrCard = (Minion) gameEnv.getElem(affectedRow, j);
             if (itrCard != null && itrCard.getHealth() > maxHealth) {
                 maxHealth = itrCard.getHealth();
                 affectedColumn = j;
             }
         }
         // stolenCard = the card that was stolen from the other player
-        Minion stolenCard = (Minion)gameEnv.getElem(affectedRow, affectedColumn);
+        Minion stolenCard = (Minion) gameEnv.getElem(affectedRow, affectedColumn);
 
         // if the number of cards on current player is already full, return error
         // stolenCard.getSittingRow returns the position (Front, Back) that the card is supposed to sit
         if (gameEnv.cardsOnRowCounter(stolenCard.findSittingRow(), playerIdx) == 5)
             return "Cannot steal enemy card since the player's row is full.";
 
-        stolenCard = (Minion)gameEnv.getTable().removeCard(affectedRow, affectedColumn);
+        stolenCard = (Minion) gameEnv.getTable().removeCard(affectedRow, affectedColumn);
         gameEnv.placeCardOnRow(stolenCard, playerIdx);
         //return no error
         return null;
@@ -901,6 +993,7 @@ class LordRoyce extends Hero implements SpecialAbility {
     public LordRoyce(CardInput cardInp) {
         super(cardInp);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         return null;
@@ -912,6 +1005,7 @@ class EmpressThorina extends Hero implements SpecialAbility {
     public EmpressThorina(CardInput cardInp) {
         super(cardInp);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         return null;
@@ -923,6 +1017,7 @@ class KingMudface extends Hero implements SpecialAbility {
     public KingMudface(CardInput cardInp) {
         super(cardInp);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         return null;
@@ -934,8 +1029,21 @@ class GeneralKociraw extends Hero implements SpecialAbility {
     public GeneralKociraw(CardInput cardInp) {
         super(cardInp);
     }
+
     @Override
     public String useAbility(Game gameEnv) {
         return null;
     }
+}
+// @formatter:off
+
+interface Cons {
+    int nrRows = 4;
+    int nrCols = 5;
+    int player2Back = 0;
+    int player2Front = 1;
+    int player1Front = 2;
+    int player1Back = 3;
+    int player1 = 1;
+    int player2 = 2;
 }
