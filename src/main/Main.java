@@ -21,8 +21,7 @@ import java.util.Objects;
 import java.util.Random;
 // @formatter:on
 import static java.lang.System.exit;
-import static java.util.Collections.min;
-import static java.util.Collections.shuffle;
+import static java.util.Collections.*;
 
 /**
  * The entry point to this homework. It runs the checker that tests your implentation.
@@ -203,64 +202,81 @@ public final class Main {
             }
 
         }
+        if (iteratorAction.getCommand().compareTo("cardUsesAbility") == 0) {
+            String error = gameEnv.cardUsesAbility(iteratorAction);
+            if (error != null) {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.putPOJO("cardAttacker", iteratorAction.getCardAttacker());
+                resultForPrint.putPOJO("cardAttacked", iteratorAction.getCardAttacked());
+                resultForPrint.put("error", error);
+            }
+        }
         return resultForPrint;
     }
 }
 
 class Table {
-    private Minion[][] table;
-
+//    private Minion[][] table;
+    ArrayList<ArrayList<Minion>> table;
     public Table() {
-        table = new Minion[Cons.nrRows][Cons.nrCols];
+        table = new ArrayList<>();
+        ArrayList<Minion> row;
+        for (int j = 0; j < Cons.nrRows; j++) {
+             row = new ArrayList<>();
+            for (int i = 0; i < Cons.nrCols; i++) {
+                row.add(null);
+            }
+            table.add(row);
+        }
     }
 
     public Minion getEntry(int i, int j) {
-        return table[i][j];
+        return (table.get(i)).get(j);
     }
 
     public void setEntry(int i, int j, Minion card) {
-        table[i][j] = card;
+        (table.get(i)).set(j, card);
     }
 
-    public ArrayList<ArrayList<Card>> printTable() {
-        ArrayList<ArrayList<Card>> cardsOnTable = new ArrayList<>();
+    public ArrayList<ArrayList<Minion>> printTable() {
+        ArrayList<ArrayList<Minion>> cardsOnTable = new ArrayList<>();
         for (int i = 0; i < Cons.nrRows; i++) {
-            cardsOnTable.add(new ArrayList<Card>());
-            for (int j = 0; j < 5; j++) {
-                if (table[i][j] != null)
-                    cardsOnTable.get(i).add(table[i][j]);
+            cardsOnTable.add(new ArrayList<>());
+        }
+
+        int i = 0;
+        for (ArrayList<Minion> row : table) {
+            for (Minion minion : row) {
+                if (minion != null)
+                    cardsOnTable.get(i).add(new Minion(minion));
             }
+            i++;
         }
         return cardsOnTable;
     }
 
-    public Card removeCard(int i, int j) {
-        Card aux = table[i][j];
-        table[i][j] = null;
+    public Minion removeCard(int i, int j) {
 
-        //shift them to the left
-        for (int k = j; k < Cons.nrCols - 1; k++) {
-            table[i][k] = table[i][k + 1];
-        }
-        for (int k = Cons.nrCols - 1; k >= 0; k--) {
-            if (table[i][k] != null) {
-                table[i][k] = null;
-                break;
-            }
-        }
-        return aux;
+        (table.get(i)).add(null);
+        System.out.println(table.get(i).size() + " " + getEntry(i,j).getHealth());
+        Minion minion = table.get(i).remove(j);
+        if (getEntry(i,j) != null)
+            System.out.println("-->"+table.get(i).size() + " " + (getEntry(i,j) == minion));
+
+        return minion;
+
     }
 
     public Card getCardAtPosition(int x, int y) {
-        return table[x][y];
+        return getEntry(x, y);
     }
 
     public ArrayList<Card> getFrozenCardsOnTable() {
         ArrayList<Card> frozenCardsList = new ArrayList<>();
         for (int i = 0; i < Cons.nrRows; i++) {
             for (int j = 0; j < Cons.nrCols; j++) {
-                if (table[i][j] != null && table[i][j].findFreezeStatus())
-                    frozenCardsList.add(table[i][j]);
+                if (getEntry(i,j) != null && getEntry(i, j).findFreezeStatus())
+                    frozenCardsList.add(getEntry(i, j));
             }
         }
         return frozenCardsList;
@@ -273,7 +289,7 @@ class Table {
         else
             i = Cons.player1Front;
         for (int j = 0; j < Cons.nrCols; j++) {
-            if (table[i][j] instanceof Tank)
+            if (getEntry(i, j) instanceof Tank)
                 return true;
         }
         return false;
@@ -290,8 +306,8 @@ class Table {
         }
         for (; i <= k; i++) {
             for (int j = 0; j < Cons.nrCols; j++)
-                if (table[i][j] != null)
-                    table[i][j].setAttackUsed(false);
+                if (getEntry(i, j) != null)
+                    getEntry(i, j).setAttackUsed(false);
         }
     }
 }
@@ -470,7 +486,7 @@ class Game {
     }
     //TODO
 
-    public ArrayList<ArrayList<Card>> getCardsOnTable() {
+    public ArrayList<ArrayList<Minion>> getCardsOnTable() {
         return table.printTable();
     }
 
@@ -498,12 +514,15 @@ class Game {
             if (error == null) {
                 player.setMana(player.getMana() - card.getMana());
                 getPlayer(playerTurn).getCardsInHand().remove(handIdx); // deleting card after use
+                for (int j = 0; j < 5; j++) {
+                    if (table.getEntry(affectedRow, j) != null)
+                        if (table.getEntry(affectedRow, j).getHealth() <= 0) {
+                            table.removeCard(affectedRow, j);
+                            j--;
+                        }
+                }
             }
-            for (int j = 0; j < 5; j++) {
-                if (table.getEntry(affectedRow, j) != null)
-                    if (table.getEntry(affectedRow, j).getHealth() == 0)
-                        table.removeCard(affectedRow, j);
-            }
+
             //there is no error and the card was used
             return error;
         } else
@@ -515,18 +534,14 @@ class Game {
     }
 
     public String cardUsesAttack(ActionsInput actionsInput) {
-        int x = actionsInput.getCardAttacker().getX();
-        int y = actionsInput.getCardAttacker().getY();
-        Minion attacker = table.getEntry(x, y);
 
-        x = actionsInput.getCardAttacked().getX();
-        y = actionsInput.getCardAttacked().getY();
-        Minion attacked = table.getEntry(x, y);
+        Minion attacker = getAttacker(actionsInput);
+        Minion attacked = getAttacked(actionsInput);
 
         if (attacker == null || attacked == null)
             return "Not a valid attacker/attacked Card";
 
-        if (!belongToEnemy(x))
+        if (!belongToEnemy(actionsInput.getCardAttacked().getX()))
             return "Attacked card does not belong to the enemy.";
         if (attacker.checkIfAttacked())
             return "Attacker card has already attacked this turn.";
@@ -539,10 +554,78 @@ class Game {
                 if (!(attacked instanceof Tank))
             return "Attacked card is not of type 'Tank'.";
 
-        attacker.attack(attacker, attacked);
-        if (attacked.getHealth() <= 0)
+        attacker.attack(attacked);
+        if (attacked.getHealth() <= 0) {
+            int x = actionsInput.getCardAttacked().getX();
+            int y = actionsInput.getCardAttacked().getY();
             table.removeCard(x, y);
+        }
         return null;
+    }
+    public String cardUsesAbility(ActionsInput actionsInput) {
+//        Minion attacker = getAttacker(actionsInput);
+//        Minion attacked = getAttacked(actionsInput);
+        int x = actionsInput.getCardAttacker().getX();
+        int y = actionsInput.getCardAttacker().getY();
+        Minion attacker =  table.getEntry(x, y);
+        if (attacker == null)
+            return "Not a valid attacker Card attacker" + x + " " + y;
+
+        x = actionsInput.getCardAttacked().getX();
+        y = actionsInput.getCardAttacked().getY();
+        Minion attacked = table.getEntry(x, y);
+
+        if (attacked == null)
+            return "Not a valid attacked Card attacker" + x + " " + y;
+
+        if (attacker.findFreezeStatus())
+            return "Attacker card is frozen.";
+
+        if (attacker.checkIfAttacked())
+            return "Attacker card has already attacked this turn.";
+
+        if (checkIfHelperCard(attacker)) {
+            if (belongToEnemy(actionsInput.getCardAttacked().getX()))
+                return "Attacked card does not belong to the current player.";
+        } else {
+            if (!belongToEnemy(actionsInput.getCardAttacked().getX()))
+                return "Attacked card does not belong to the enemy.";
+        }
+        int enemyIdx = ((playerTurn == 1) ? 2 : 1);
+        if (table.existTank(enemyIdx))
+            if (!(attacked instanceof Tank))
+                return "Attacked card is not of type 'Tank'.";
+        attacker.useAbility(attacked);
+        attacker.setAttackUsed(true);
+
+        if (attacked.getHealth() <= 0) {
+            x = actionsInput.getCardAttacked().getX();
+            y = actionsInput.getCardAttacked().getY();
+            table.removeCard(x, y);
+        }
+        if (attacker.getHealth() <= 0) {
+            x = actionsInput.getCardAttacker().getX();
+            y = actionsInput.getCardAttacker().getY();
+            table.removeCard(x, y);
+        }
+
+        return null;
+    }
+    private Minion getAttacker(ActionsInput actionsInput) {
+        int x = actionsInput.getCardAttacker().getX();
+        int y = actionsInput.getCardAttacker().getY();
+        return table.getEntry(x, y);
+
+    }
+    private Minion getAttacked(ActionsInput actionsInput) {
+        int x = actionsInput.getCardAttacked().getX();
+        int y = actionsInput.getCardAttacked().getY();
+        return table.getEntry(x, y);
+    }
+    private boolean checkIfHelperCard(Minion card) {
+        if (card instanceof Disciple)
+            return true;
+        return false;
     }
     private boolean belongToEnemy(int x) {
         int enemyIdx = ((playerTurn == 1) ? 2 : 1);
@@ -743,9 +826,13 @@ class Minion extends Card {
 
     }
 
-    public void attack(Minion attacker, Minion attacked) {
-        attacked.setHealth(attacked.getHealth() - attacker.getAttackDamage());
-        attacker.attackUse = true;
+    public void attack(Minion attacked) {
+        attacked.setHealth(attacked.getHealth() - this.getAttackDamage());
+        this.attackUse = true;
+    }
+
+    public void useAbility(Minion attacked) {
+
     }
 
     public char findSittingRow() {
@@ -868,8 +955,10 @@ class Miraj extends Minion {
         super(cardInp, row);
     }
 
-    public void useAbility(Game gameEnv) {
-
+    public void useAbility(Minion attacked) {
+        int aux = this.getHealth();
+        this.setHealth(attacked.getHealth());
+        attacked.setHealth(aux);
     }
 }
 
@@ -878,8 +967,8 @@ class TheRipper extends Minion {
         super(cardInp, row);
     }
 
-    public void useAbility(Game gameEnv) {
-
+    public void useAbility(Minion attacked) {
+        attacked.setAttackDamage(Math.max(attacked.getAttackDamage() - 2, 0));
     }
 }
 
@@ -888,8 +977,10 @@ class Disciple extends Minion {
         super(cardInp, row);
     }
 
-    public void useAbility(Game gameEnv) {
-
+    public void useAbility(Minion attacked) {
+        //TODO modify back
+        int aux = attacked.getHealth();
+        attacked.setHealth(aux + 2);
     }
 }
 
@@ -898,8 +989,10 @@ class TheCursedOne extends Minion {
         super(cardInp, row);
     }
 
-    public void useAbility(Game gameEnv) {
-
+    public void useAbility(Minion attacked) {
+        int aux = attacked.getHealth();
+        attacked.setHealth(attacked.getAttackDamage());
+        attacked.setAttackDamage(aux);
     }
 }
 
@@ -921,10 +1014,12 @@ class Firestorm extends Environment {
         int playerTurn = gameEnv.getPlayerTurn();
         Player player = gameEnv.getPlayer(playerTurn);
 
+        int aux;
         for (int j = 0; j < 5; j++) {
             Minion affectedCard = (Minion) gameEnv.getElem(affectedRow, j);
             if (affectedCard != null) {
-                int aux = affectedCard.getHealth();
+                aux = affectedCard.getHealth();
+                //TODO remove this
                 affectedCard.setHealth(aux - 1);
             }
         }

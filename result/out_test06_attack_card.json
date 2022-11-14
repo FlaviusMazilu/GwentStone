@@ -41,7 +41,7 @@
     "description" : "Standard card: He has seen everything, his mind has never been asleep since the making of the realm.",
     "colors" : [ "Black", "White", "Green" ],
     "name" : "Warden",
-    "health" : 6,
+    "health" : 1,
     "attackDamage" : 2
   } ], [ {
     "mana" : 2,
@@ -55,7 +55,7 @@
     "description" : "Premium card: Nobody suspects an outcast, not even the Gods.",
     "colors" : [ "Black", "White", "Red" ],
     "name" : "The Cursed One",
-    "health" : 3,
+    "health" : 1,
     "attackDamage" : 0
   }, {
     "mana" : 2,
