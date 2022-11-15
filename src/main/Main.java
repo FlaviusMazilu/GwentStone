@@ -89,18 +89,21 @@ public final class Main {
             ArrayList<ActionsInput> actionsInp = currentGame.getActions();
 
             for (ActionsInput iteratorAction : actionsInp) {
-                ObjectNode printResult = executeAction(iteratorAction, gameEnv, objectMapper);
+                ObjectNode printResult = executeAction(iteratorAction, gameEnv, objectMapper, gameIdx);
                 if (printResult.size() != 0)
                     output.add(printResult);
+
             }
             gameIdx++;
         }
+        System.out.println("-------");
+
 
         ObjectWriter objectWriter = objectMapper.writerWithDefaultPrettyPrinter();
         objectWriter.writeValue(new File(filePath2), output);
     }
 
-    static private ObjectNode executeAction(ActionsInput iteratorAction, Game gameEnv, ObjectMapper objectMapper) throws JsonProcessingException {
+    static private ObjectNode executeAction(ActionsInput iteratorAction, Game gameEnv, ObjectMapper objectMapper, int gamesCount) throws JsonProcessingException {
 
         ObjectNode resultForPrint = objectMapper.createObjectNode();
         int playerIndex = iteratorAction.getPlayerIdx();
@@ -116,7 +119,7 @@ public final class Main {
             Hero hero = gameEnv.getPlayer(playerIndex).getPlayerHero();
             resultForPrint.put("command", iteratorAction.getCommand());
             resultForPrint.put("playerIdx", playerIndex);
-            resultForPrint.putPOJO("output", hero);
+            resultForPrint.putPOJO("output", new Hero(hero));
         }
         if (iteratorAction.getCommand().compareTo("getPlayerDeck") == 0) {
             resultForPrint.put("command", iteratorAction.getCommand());
@@ -200,8 +203,22 @@ public final class Main {
                 resultForPrint.putPOJO("cardAttacked", iteratorAction.getCardAttacked());
                 resultForPrint.put("error", error);
             }
-
         }
+        if (iteratorAction.getCommand().compareTo("useAttackHero") == 0) {
+            String error = gameEnv.cardUsesAttack(iteratorAction);
+            //TODO
+            if (error == null)
+                return resultForPrint;
+            if (error.compareTo("Player one killed the enemy hero.") == 0 ||
+                    error.compareTo("Player two killed the enemy hero.") == 0) {
+                resultForPrint.put("gameEnded", error);
+            } else {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.putPOJO("cardAttacker", iteratorAction.getCardAttacker());
+                resultForPrint.put("error", error);
+            }
+        }
+
         if (iteratorAction.getCommand().compareTo("cardUsesAbility") == 0) {
             String error = gameEnv.cardUsesAbility(iteratorAction);
             if (error != null) {
@@ -210,6 +227,26 @@ public final class Main {
                 resultForPrint.putPOJO("cardAttacked", iteratorAction.getCardAttacked());
                 resultForPrint.put("error", error);
             }
+        }
+        if (iteratorAction.getCommand().compareTo("useHeroAbility") == 0) {
+            String error = gameEnv.useHeroAbility(iteratorAction);
+            if (error != null) {
+                resultForPrint.put("command", iteratorAction.getCommand());
+                resultForPrint.put("affectedRow", iteratorAction.getAffectedRow());
+                resultForPrint.put("error", error);
+            }
+        }
+        if (iteratorAction.getCommand().compareTo("getTotalGamesPlayed") == 0) {
+            resultForPrint.put("command", "getTotalGamesPlayed");
+            resultForPrint.put("output", gamesCount + 1);
+        }
+        if (iteratorAction.getCommand().compareTo("getPlayerOneWins") == 0) {
+            resultForPrint.put("command", "getPlayerOneWins");
+            resultForPrint.put("output", gameEnv.getPlayer(Cons.player1).getWins());
+        }
+        if (iteratorAction.getCommand().compareTo("getPlayerTwoWins") == 0) {
+            resultForPrint.put("command", "getPlayerTwoWins");
+            resultForPrint.put("output", gameEnv.getPlayer(Cons.player2).getWins());
         }
         return resultForPrint;
     }
@@ -258,13 +295,7 @@ class Table {
     public Minion removeCard(int i, int j) {
 
         (table.get(i)).add(null);
-        System.out.println(table.get(i).size() + " " + getEntry(i,j).getHealth());
-        Minion minion = table.get(i).remove(j);
-        if (getEntry(i,j) != null)
-            System.out.println("-->"+table.get(i).size() + " " + (getEntry(i,j) == minion));
-
-        return minion;
-
+        return table.get(i).remove(j);
     }
 
     public Card getCardAtPosition(int x, int y) {
@@ -310,11 +341,20 @@ class Table {
                     getEntry(i, j).setAttackUsed(false);
         }
     }
+
+    public void removeIfHealthZero(int row) {
+        for (Minion card : table.get(row)) {
+            if (card != null && card.getHealth() <= 0) {
+                table.get(row).add(null);
+                table.get(row).remove(card);
+            }
+        }
+    }
 }
 
 class Game {
     private Player playerOne;
-    private Table table = new Table();
+    private Table table;
     private Player playerTwo;
     private int seed;
     private int deckIndexPlayerOne;
@@ -326,8 +366,10 @@ class Game {
     private int affectedRow;
 
     public Game(Input inputData, int gameIdx, Player playerOne, Player playerTwo) {//StartGameInput gameInp, Player playerOne, Player playerTwo) {
+        table = new Table();
         StartGameInput gameInp = inputData.getGames().get(gameIdx).getStartGame();
         seed = gameInp.getShuffleSeed();
+        System.out.println(seed);
         deckIndexPlayerOne = gameInp.getPlayerOneDeckIdx();
         deckIndexPlayerTwo = gameInp.getPlayerTwoDeckIdx();
 
@@ -343,8 +385,9 @@ class Game {
         playerOne.setChosenDeck(inputData, 1, gameInp.getPlayerOneDeckIdx(), seed);
         playerTwo.setChosenDeck(inputData, 2, gameInp.getPlayerTwoDeckIdx(), seed);
 
-        playerOne.setPlayerHero(new Hero(gameInp.getPlayerOneHero()));
-        playerTwo.setPlayerHero(new Hero(gameInp.getPlayerTwoHero()));
+
+        playerOne.setPlayerHero((Hero)Card.createTypeOfCard(gameInp.getPlayerOneHero()));
+        playerTwo.setPlayerHero((Hero)Card.createTypeOfCard(gameInp.getPlayerTwoHero()));
 
         //initiates first round
         drawNewCard();
@@ -352,7 +395,7 @@ class Game {
     }
 
     //TODO to remove->redundant
-    public Card getElem(int i, int j) {
+    public Minion getElem(int i, int j) {
         return table.getEntry(i, j);
     }
 
@@ -387,6 +430,8 @@ class Game {
                     table.getEntry(i, j).freeze(false);
             }
         }
+        getPlayer(indexPlayer).getPlayerHero().setAttackUsed(false);
+
     }
 
     private void startNewRound() {
@@ -534,46 +579,54 @@ class Game {
     }
 
     public String cardUsesAttack(ActionsInput actionsInput) {
+        int enemyIdx = ((playerTurn == 1) ? 2 : 1);
 
         Minion attacker = getAttacker(actionsInput);
-        Minion attacked = getAttacked(actionsInput);
+        Card attacked = getAttacked(actionsInput, enemyIdx);
+
 
         if (attacker == null || attacked == null)
             return "Not a valid attacker/attacked Card";
-
-        if (!belongToEnemy(actionsInput.getCardAttacked().getX()))
-            return "Attacked card does not belong to the enemy.";
+        if (!(attacked instanceof Hero))
+            if (!belongToEnemy(actionsInput.getCardAttacked().getX()))
+                return "Attacked card does not belong to the enemy.";
         if (attacker.checkIfAttacked())
             return "Attacker card has already attacked this turn.";
         if (attacker.findFreezeStatus())
             return "Attacker card is frozen.";
 
-        int enemyIdx = ((playerTurn == 1) ? 2 : 1);
         // if exist at least one tank and the attacked is not a tank
         if (table.existTank(enemyIdx))
                 if (!(attacked instanceof Tank))
             return "Attacked card is not of type 'Tank'.";
 
         attacker.attack(attacked);
-        if (attacked.getHealth() <= 0) {
+        if ((attacked instanceof Minion) && ((HasHealth)attacked).getHealth() <= 0) {
             int x = actionsInput.getCardAttacked().getX();
             int y = actionsInput.getCardAttacked().getY();
             table.removeCard(x, y);
         }
+        if (attacked instanceof Hero) {
+            if (((Hero)attacked).getHealth() <= 0) {
+                getPlayer(playerTurn).setWins(getPlayer(playerTurn).getWins() + 1);
+                if (playerTurn == Cons.player1)
+                    return "Player one killed the enemy hero.";
+                else
+                    return "Player two killed the enemy hero.";
+            }
+        }
         return null;
     }
     public String cardUsesAbility(ActionsInput actionsInput) {
-//        Minion attacker = getAttacker(actionsInput);
-//        Minion attacked = getAttacked(actionsInput);
         int x = actionsInput.getCardAttacker().getX();
         int y = actionsInput.getCardAttacker().getY();
         Minion attacker =  table.getEntry(x, y);
         if (attacker == null)
             return "Not a valid attacker Card attacker" + x + " " + y;
 
-        x = actionsInput.getCardAttacked().getX();
-        y = actionsInput.getCardAttacked().getY();
-        Minion attacked = table.getEntry(x, y);
+        int x2 = actionsInput.getCardAttacked().getX();
+        int y2 = actionsInput.getCardAttacked().getY();
+        Minion attacked = table.getEntry(x2, y2);
 
         if (attacked == null)
             return "Not a valid attacked Card attacker" + x + " " + y;
@@ -592,23 +645,41 @@ class Game {
                 return "Attacked card does not belong to the enemy.";
         }
         int enemyIdx = ((playerTurn == 1) ? 2 : 1);
-        if (table.existTank(enemyIdx))
+        if (table.existTank(enemyIdx) && !checkIfHelperCard(attacker))
             if (!(attacked instanceof Tank))
                 return "Attacked card is not of type 'Tank'.";
         attacker.useAbility(attacked);
         attacker.setAttackUsed(true);
 
         if (attacked.getHealth() <= 0) {
-            x = actionsInput.getCardAttacked().getX();
-            y = actionsInput.getCardAttacked().getY();
-            table.removeCard(x, y);
+            table.removeCard(x2, y2);
         }
         if (attacker.getHealth() <= 0) {
-            x = actionsInput.getCardAttacker().getX();
-            y = actionsInput.getCardAttacker().getY();
             table.removeCard(x, y);
         }
 
+        return null;
+    }
+    public String useHeroAbility(ActionsInput actionsInput) {
+        Player player = getPlayer(getPlayerTurn());
+        Hero hero = player.getPlayerHero();
+        affectedRow = actionsInput.getAffectedRow();
+
+        if (player.getMana() < hero.getMana())
+            return "Not enough mana to use hero's ability.";
+        if (hero.checkIfAttacked())
+            return "Hero has already attacked this turn.";
+        if ((hero instanceof LordRoyce) || (hero instanceof EmpressThorina))
+            if (!belongToEnemy(affectedRow))
+                return "Selected row does not belong to the enemy.";
+        if ((hero instanceof GeneralKociraw) || (hero instanceof KingMudface))
+            if (belongToEnemy(affectedRow))
+                return "Selected row does not belong to the current player.";
+
+        String error = hero.useAbility(this);
+        hero.setAttackUsed(true);
+        player.setMana(player.getMana() - hero.getMana());
+        table.removeIfHealthZero(affectedRow);
         return null;
     }
     private Minion getAttacker(ActionsInput actionsInput) {
@@ -617,7 +688,10 @@ class Game {
         return table.getEntry(x, y);
 
     }
-    private Minion getAttacked(ActionsInput actionsInput) {
+    private Card getAttacked(ActionsInput actionsInput, int enemyIdx) {
+        if (actionsInput.getCommand().compareTo("useAttackHero") == 0)
+            return getPlayer(enemyIdx).getPlayerHero();
+
         int x = actionsInput.getCardAttacked().getX();
         int y = actionsInput.getCardAttacked().getY();
         return table.getEntry(x, y);
@@ -636,10 +710,11 @@ class Game {
         return true;
     }
 
+
 }
 
 class Player {
-    private int score;
+    private int wins;
     private Hero playerHero;
     private ArrayList<Card> cardsInHand;
     private ArrayList<Card> chosenDeck;
@@ -653,7 +728,6 @@ class Player {
         nrCardsInDeck = decksInp.getNrCardsInDeck();
         createDecks(decksInp.getDecks());
         nrCardsInDeck = decksInp.getNrCardsInDeck();
-        cardsInHand = new ArrayList<>();
     }
 
     private void createDecks(ArrayList<ArrayList<CardInput>> decksInp) {
@@ -667,7 +741,7 @@ class Player {
         // implementation of creating a card based on which type of it, the card is
         for (ArrayList<CardInput> currentDeckInp : decksInp) {
             for (CardInput currentCardInp : currentDeckInp) {
-                Card newCard = createTypeOfCard(currentCardInp);
+                Card newCard = Card.createTypeOfCard(currentCardInp);
                 if (newCard == null) {
                     System.out.println("Invalid card name\n");
                     exit(69);
@@ -678,37 +752,7 @@ class Player {
         }
     }
 
-    private Card createTypeOfCard(CardInput cardInput) {
-        String name = cardInput.getName();
-        if (name.compareTo("The Ripper") == 0)
-            return new TheRipper(cardInput, 'F'); //FRONT_ROWer
-        if (name.compareTo("Miraj") == 0)
-            return new Miraj(cardInput, 'F');
-        if (name.compareTo("Goliath") == 0 || name.compareTo("Warden") == 0)
-            return new Tank(cardInput, 'F');
-        if (name.compareTo("Sentinel") == 0 || name.compareTo("Berserker") == 0)
-            return new Minion(cardInput, 'B');
-        if (name.compareTo("The Cursed One") == 0)
-            return new TheCursedOne(cardInput, 'B');
-        if (name.compareTo("Disciple") == 0)
-            return new Disciple(cardInput, 'B');
-        if (name.compareTo("Firestorm") == 0)
-            return new Firestorm(cardInput);
-        if (name.compareTo("Winterfell") == 0)
-            return new Winterfell(cardInput);
-        if (name.compareTo("Heart Hound") == 0)
-            return new HeartHound(cardInput);
-        if (name.compareTo("Lord Royce") == 0)
-            return new LordRoyce(cardInput);
-        if (name.compareTo("Empress Thorina") == 0)
-            return new EmpressThorina(cardInput);
-        if (name.compareTo("King Mudface") == 0)
-            return new KingMudface(cardInput);
-        if (name.compareTo("General Kocioraw") == 0)
-            return new GeneralKociraw(cardInput);
 
-        return null;
-    }
 
     public Hero getPlayerHero() {
         return playerHero;
@@ -718,12 +762,15 @@ class Player {
         this.playerHero = playerHero;
     }
 
-    public int getScor() {
-        return score;
+    public int getWins() {
+        return wins;
+    }
+    public void setWins(int value) {
+        wins = value;
     }
 
     public void setScor(int scor) {
-        this.score = scor;
+        this.wins = scor;
     }
 
     public ArrayList<Card> getCardsInHand() {
@@ -739,6 +786,8 @@ class Player {
     }
 
     public void setChosenDeck(Input inputData, int playerIdx, int deckIdx, int seed) {
+        cardsInHand = new ArrayList<>();
+
         this.chosenDeck = new ArrayList<Card>();
 
         DecksInput deckInp;
@@ -748,7 +797,7 @@ class Player {
             deckInp = inputData.getPlayerTwoDecks();
 
         for (CardInput currentCardInp : deckInp.getDecks().get(deckIdx)) {
-            Card newCard = createTypeOfCard(currentCardInp);
+            Card newCard = Card.createTypeOfCard(currentCardInp);
             chosenDeck.add(newCard);
         }
 //        System.out.println(chosenDeck.get(0).getMana() + " " + allDecks.get(0).get(0).getMana());
@@ -788,21 +837,14 @@ abstract class Environment extends Card implements SpecialAbility {
 
 }
 
-class Minion extends Card {
+class Minion extends Card implements HasHealth{
 
     private int health;
     private int attackDamage;
     private char sittingRow;
     private boolean freezeStatus;
 
-    private boolean attackUse;
 
-    public boolean checkIfAttacked() {
-        return attackUse;
-    }
-    public void setAttackUsed(boolean status) {
-        attackUse = status;
-    }
     public Minion(CardInput cardInp, char row) {
         super(cardInp);
         attackDamage = cardInp.getAttackDamage();
@@ -815,7 +857,7 @@ class Minion extends Card {
         attackDamage = minion.getAttackDamage();
         sittingRow = minion.findSittingRow();
         freezeStatus = minion.findFreezeStatus();
-        attackUse = minion.attackUse;
+        super.setAttackUsed(minion.checkIfAttacked());
         super.setName(minion.getName());
         super.setDescription(minion.getDescription());
         super.setColors(minion.getColors());
@@ -826,9 +868,13 @@ class Minion extends Card {
 
     }
 
-    public void attack(Minion attacked) {
-        attacked.setHealth(attacked.getHealth() - this.getAttackDamage());
-        this.attackUse = true;
+    public void attack(Card attacked) {
+        if (attacked instanceof HasHealth) {
+            int health = ((HasHealth) attacked).getHealth();
+            ((HasHealth)attacked).setHealth(health - this.getAttackDamage());
+            this.setAttackUsed(true);
+        }
+
     }
 
     public void useAbility(Minion attacked) {
@@ -863,17 +909,33 @@ class Minion extends Card {
         this.health = health;
     }
 }
-
-class Hero extends Card {
+interface HasHealth {
+    public int getHealth();
+    public void setHealth(int health);
+}
+class Hero extends Card implements HasHealth {
     private int health;
 
     public Hero(CardInput cardInp) {
         super(cardInp);
         health = 30;
     }
+    public Hero(Hero heroOG) {
+        health = heroOG.health;
+        super.setColors(heroOG.getColors());
+        super.setDescription(heroOG.getDescription());
+        super.setMana(heroOG.getMana());
+        super.setName(heroOG.getName());
+
+    }
 
     public String attack() {
 
+        return null;
+    }
+
+    public String useAbility(Game gameEnv) {
+        System.out.println("this should not be returned" + gameEnv.getAffectedRow());
         return null;
     }
 
@@ -892,6 +954,15 @@ abstract class Card {
     private String description;
     private ArrayList<String> colors;
     private String name;
+
+    private boolean attackUse;
+
+    public boolean checkIfAttacked() {
+        return attackUse;
+    }
+    public void setAttackUsed(boolean status) {
+        attackUse = status;
+    }
 
     public Card(CardInput cardInp) { // shallow copy
         this.name = cardInp.getName();
@@ -942,6 +1013,37 @@ abstract class Card {
         this.colors = colors;
     }
 
+    static public Card createTypeOfCard(CardInput cardInput) {
+        String name = cardInput.getName();
+        if (name.compareTo("The Ripper") == 0)
+            return new TheRipper(cardInput, 'F'); //FRONT_ROWer
+        if (name.compareTo("Miraj") == 0)
+            return new Miraj(cardInput, 'F');
+        if (name.compareTo("Goliath") == 0 || name.compareTo("Warden") == 0)
+            return new Tank(cardInput, 'F');
+        if (name.compareTo("Sentinel") == 0 || name.compareTo("Berserker") == 0)
+            return new Minion(cardInput, 'B');
+        if (name.compareTo("The Cursed One") == 0)
+            return new TheCursedOne(cardInput, 'B');
+        if (name.compareTo("Disciple") == 0)
+            return new Disciple(cardInput, 'B');
+        if (name.compareTo("Firestorm") == 0)
+            return new Firestorm(cardInput);
+        if (name.compareTo("Winterfell") == 0)
+            return new Winterfell(cardInput);
+        if (name.compareTo("Heart Hound") == 0)
+            return new HeartHound(cardInput);
+        if (name.compareTo("Lord Royce") == 0)
+            return new LordRoyce(cardInput);
+        if (name.compareTo("Empress Thorina") == 0)
+            return new EmpressThorina(cardInput);
+        if (name.compareTo("King Mudface") == 0)
+            return new KingMudface(cardInput);
+        if (name.compareTo("General Kocioraw") == 0)
+            return new GeneralKociraw(cardInput);
+
+        return null;
+    }
 
 }
 
@@ -978,9 +1080,7 @@ class Disciple extends Minion {
     }
 
     public void useAbility(Minion attacked) {
-        //TODO modify back
-        int aux = attacked.getHealth();
-        attacked.setHealth(aux + 2);
+        attacked.setHealth(attacked.getHealth() + 2);
     }
 }
 
@@ -1083,7 +1183,7 @@ class HeartHound extends Environment {
 
 }
 
-class LordRoyce extends Hero implements SpecialAbility {
+class LordRoyce extends Hero{
 
     public LordRoyce(CardInput cardInp) {
         super(cardInp);
@@ -1091,11 +1191,27 @@ class LordRoyce extends Hero implements SpecialAbility {
 
     @Override
     public String useAbility(Game gameEnv) {
+        int row = gameEnv.getAffectedRow();
+
+        Minion cardMaxDmg = gameEnv.getElem(row, 0);
+        // if there is not a single card on the affected row, end function
+        if (cardMaxDmg == null)
+            return null;
+        int posMaxDmg = 0;
+        for (int j = 1; j < 5; j++ ) {
+            if (gameEnv.getElem(row, j) != null) {
+                if (cardMaxDmg.getAttackDamage() < gameEnv.getElem(row, j).getAttackDamage()) {
+                    cardMaxDmg = gameEnv.getElem(row, j);
+                    posMaxDmg = j;
+                }
+            }
+        }
+        gameEnv.getElem(row, posMaxDmg).freeze(true);
         return null;
     }
 }
 
-class EmpressThorina extends Hero implements SpecialAbility {
+class EmpressThorina extends Hero {
 
     public EmpressThorina(CardInput cardInp) {
         super(cardInp);
@@ -1103,11 +1219,25 @@ class EmpressThorina extends Hero implements SpecialAbility {
 
     @Override
     public String useAbility(Game gameEnv) {
+        int row = gameEnv.getAffectedRow();
+        Minion cardMaxHealth = gameEnv.getElem(row, 0);
+        // if there is not a single card on the affected row, end function
+        if (cardMaxHealth == null)
+            return null;
+        int posMaxHealth = 0;
+        for (int j = 1; j < 5; j++ ) {
+            if (gameEnv.getElem(row, j) != null)
+                if (cardMaxHealth.getHealth() < gameEnv.getElem(row, j).getHealth()) {
+                    cardMaxHealth = gameEnv.getElem(row, j);
+                    posMaxHealth = j;
+                }
+        }
+        gameEnv.getTable().removeCard(row, posMaxHealth);
         return null;
     }
 }
 
-class KingMudface extends Hero implements SpecialAbility {
+class KingMudface extends Hero {
 
     public KingMudface(CardInput cardInp) {
         super(cardInp);
@@ -1115,11 +1245,17 @@ class KingMudface extends Hero implements SpecialAbility {
 
     @Override
     public String useAbility(Game gameEnv) {
+        int row = gameEnv.getAffectedRow();
+        for (int j = 0; j < Cons.nrCols; j++) {
+            Minion card = gameEnv.getElem(row, j);
+            if (card != null)
+                card.setHealth(card.getHealth() + 1);
+        }
         return null;
     }
 }
 
-class GeneralKociraw extends Hero implements SpecialAbility {
+class GeneralKociraw extends Hero {
 
     public GeneralKociraw(CardInput cardInp) {
         super(cardInp);
@@ -1127,6 +1263,12 @@ class GeneralKociraw extends Hero implements SpecialAbility {
 
     @Override
     public String useAbility(Game gameEnv) {
+        int row = gameEnv.getAffectedRow();
+        for (int j = 0; j < Cons.nrCols; j++) {
+            Minion card = gameEnv.getElem(row, j);
+            if (card != null)
+                card.setAttackDamage(card.getAttackDamage() + 1);
+        }
         return null;
     }
 }
