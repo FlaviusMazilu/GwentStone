@@ -51,3 +51,5 @@ two players, of specific **Player** class and **a Table** which implements the b
 and there were so many things to consider that you end up forgetting parts of it. But that's due to the fact that we didn't work on a real project in java before
 - Not my finest implementation, I could've done better if I had no mercy for the code that i already wrote and start from scratch a couple of times, but it is what it is.
 At the end i figured out more about how i could do the relationship between classes and what kinds of problems there can appear if the relationship chosen is wrong.
+
+<div align="center"><img src="https://tenor.com/view/witcher3-gif-9340436.gif" width="500px"></div>
